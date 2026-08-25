@@ -7,7 +7,7 @@ In short: retrieve relevant information first, then generate an answer grounded 
 This is the pipeline we are aiming for:
 
 <p>
-<img src="/images/pipeline.png" alt="Table example" width="600">
+<img src="/images/pipeline.png" alt="Table example" width="300">
 </p>
 
 
