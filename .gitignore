@@ -1,6 +1,9 @@
 # Maven build output
 target/
 
+# IntelliJ compiler output
+out/
+
 # IntelliJ IDEA
 .idea/
 *.iml
