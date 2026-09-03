@@ -26,6 +26,45 @@ sample content I provide in this taster.
 
 The `resources/docs` directory is where our RAG corpus is.
 
+## Get an OpenAPI API key
+
+API access: This project uses the OpenAI API to generate embeddings. An OpenAI API key with available API credits is required to run the embedding example.
+
+A ChatGPT subscription and API access are billed separately.
+
+Get an OpenAPI API key.
+
+1. In your OpenAPI API account, go to the [API keys page](https://platform.openai.com/api-keys?utm_source=chatgpt.com).
+2. Click `+ Create new secret key`
+3. Give your key a name and copy it to the clipboard.
+4. Save it as an environment variable.
+ 
+_Windows_
+
+Create a new user environment variable called `OPENAI_API_KEY`
+ 
+_MacOS_
+
+1. Open a terminal and edit `zshrc`: `nano ~/.zshrc`
+2. Add this line: `export OPENAI_API_KEY="sk-your-actual-key-here"`
+3. Save and exit nano:
+   1. Control+O + Enter to save
+   2. Control+X to exit
+   3. Reload your shell configuration: run `source ~/.zshrc`
+   4. Verify the value by pasting the following in a terminal:
+
+```shell
+if [ -n "$OPENAI_API_KEY" ]; then
+    echo "OPENAI_API_KEY is set"
+else
+    echo "OPENAI_API_KEY is NOT set"
+fi
+```
+
+This command checks whether `OPENAI_API_KEY` has a value without displaying the API key itself.   
+    
+Finally, restart IntelliJ.
+
 ## Pipeline end game
 
 We are aiming for the following flow:
@@ -91,6 +130,9 @@ This is a Maven project, so add `pom.xml` at the project root. Add the following
 
 </project>
 ```
+
+That one and only dependency downloads the OpenAI Java SDK library from Maven and make its classes available to our application.
+It is *client-side software* that runs inside the application.
 
 ## Get a tiny Java program running
 
@@ -473,7 +515,9 @@ In mathematics, an embedding is a vector:
 
 `v=[0.12, −0.43, 0.87, 0.21`
 
-You can find a lot more details in ![rag concepts](C:\Users\Steve\dev\tasters\rag-taster\docs\rag-concepts.md)
+You can find a lot more details in ![rag concepts](C:\Users\Steve\dev\tasters\rag-taster\project-docs\rag-concepts.md)
+
+
 
 For now, let's get down to the business of creating embedding functionality.
 
@@ -514,7 +558,243 @@ public class EmbeddingService {
     }
 }
 ```
+
+The `OpenAIOkHttpClient.fromEnv()` call constructs the client using a configuration from the OPEN_API_KEY environment variable you created at the beginning of this taster.
+
+`OpenAIOkHttpClient` is an implementation of the OpenAI Java client's HTTP transport. OkHttp is the HTTP client library underneath the dependency in `pom.xml`.
+
 The current Java SDK uses EmbeddingCreateParams, EmbeddingModel.TEXT_EMBEDDING_3_SMALL, and client.embeddings().create(...) for this operation.
+
+Modify `Main.java`
+
+Instantiate the embedding service by adding the following line after `Chunker chunker = new Chunker();`:
+`EmbeddingService embeddingService = new EmbeddingService();`
+
+The beginning of `Main.java` (not including imports) should look like this:
+
+```java
+Path docsPath = Paths.get("src/main/resources/docs");
+
+Chunker chunker = new Chunker();
+EmbeddingService embeddingService = new EmbeddingService();
+```
+
+Modify your chunk loop. It currently looks like this:
+```java
+for (Chunk chunk : chunks) {
+    System.out.println("--- CHUNK ---");
+    System.out.println(chunk.getContent());
+}
+```
+Change it to this:
+
+```java
+for (Chunk chunk : chunks) {
+
+    List<Float> embedding =
+            embeddingService.createEmbedding(chunk.getContent());
+
+    System.out.println("--- CHUNK ---");
+    System.out.println(chunk.getContent());
+
+    System.out.println("Embedding dimensions: " + embedding.size());
+
+    System.out.println("First five values:");
+
+    for (int i = 0; i < 5; i++) {
+        System.out.println(embedding.get(i));
+    }
+    
+    break;
+}
+```
+
+The key line is `embeddingService.createEmbedding(chunk.getContent());`
+
+The line takes the actual text of the chunk and sending it to the embedding model. 
+
+The result `List<Float> embedding` is the vector.
+
+And `embedding.size()` tells us the number of dimensions in the vector.
+
+This is a baby step--instead of creating embeddings for all chunks, we limit ourselves to **one** using the `break;` statement.
+
+The flow will be:
+
+```
+Our Main.java
+      │
+      ▼
+EmbeddingService
+      │
+      ▼
+OpenAI Java SDK
+      │
+      ▼
+OpenAIOkHttpClient
+      │
+      ▼
+HTTPS request
+      │
+      ▼
+OpenAI API
+      │
+      ▼
+Embedding response
+```
+
+## Run the updated application
+
+When you run the application you should see output similar to this:
+```
+===== authentication.md =====
+--- CHUNK ---
+# Authentication
+Embedding dimensions: 1536
+First five values:
+-0.012931824
+0.040618896
+0.022216797
+-0.026626587
+0.0037193298
+===== errors.md =====
+--- CHUNK ---
+# Errors
+Embedding dimensions: 1536
+First five values:
+-0.0082473755
+0.049835205
+0.053009033
+0.0137786865
+-0.022567749
+===== rate-limits.md =====
+--- CHUNK ---
+# Rate Limits
+Embedding dimensions: 1536
+First five values:
+0.0029144287
+0.031051636
+0.029251099
+-0.029586792
+-0.022338867
+===== webhooks.md =====
+--- CHUNK ---
+# Webhooks
+Embedding dimensions: 1536
+First five values:
+-0.053344727
+0.0104904175
+-0.013137817
+-0.026046753
+0.029129028
+```
+## Let's unpack that
+
+The outer loop reads each file in the `resources/docs` directory and splits each file into chunks.
+
+The inner loop reads one chunk per file, generates a list of embedding vectors, then prints the embedding size along with first five embeddings in the first vector.
+
+What does this tell us? Several things.
+
+1. The API call succeeded.
+
+We got actual numerical data back for every chunk.
+
+2. Every embedding has 1,536 dimensions.
+
+3. Different text produces different vectors.
+
+Here is an important point based on our chunk limitation.
+We should not look at those first five numbers and conclude that, say, Authentication and Errors are more similar because their first numbers are closer. 
+
+That's not how we're going to determine semantic similarity.
+
+The entire 1,536-dimensional vectors matter.
+
+## Recap & where we're going next
+
+Right now we're doing:
+
+```
+                    ┌── vector 1
+authentication.md ──┤
+                    └── 1536 numbers
+
+                    ┌── vector 2
+errors.md ──────────┤
+                    └── 1536 numbers
+
+                    ┌── vector 3
+rate-limits.md ────┤
+                    └── 1536 numbers
+
+                    ┌── vector 4
+webhooks.md ────────┤
+                    └── 1536 numbers
+```
+
+We've created the vectors.
+
+Now we need to do something with them.
+
+The next experiment I'd recommend is particularly illuminating:
+
+We'll create a query such as:
+
+How do I authenticate with the API?
+
+We'll generate an embedding for that query.
+
+Then we'll compare the query vector against each document vector using cosine similarity.
+See [RAG concepts](rag-concepts.md) for details about cosine similarity.
+
+
+Conceptually:
+
+```
+                 "How do I authenticate?"
+                           │
+                           ▼
+                    Query embedding
+                           │
+                           ▼
+                     1536 numbers
+                           │
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
+       Authentication    Errors     Webhooks
+          vector          vector       vector
+             │             │             │
+             └─────────────┼─────────────┘
+                           ▼
+                 cosine similarity
+                           │
+                           ▼
+                 ranked results
+```
+
+And hopefully we'll see something like:
+
+```
+Authentication    0.87
+Errors            0.31
+Rate Limits       0.24
+Webhooks          0.18
+```
+That's the moment where the numbers stop being abstract.
+
+We'll actually use the vectors to answer the question:
+
+"Which piece of my documentation is most relevant to this query?"
+
+And that is the "retrieval" in Retrieval-Augmented Generation.
+
+
+## But first
+
+Let's modify the application to generate embedding vectors for all chunks in all documents. 
+
+
 
 # Retrieval
 

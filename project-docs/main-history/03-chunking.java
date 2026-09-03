@@ -1,14 +1,3 @@
-package com.steveomurphy.tasters.rag;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.stream.Stream;
-
-/**
- * Driver program
- */
 public class Main {
 
     /**
@@ -26,7 +15,6 @@ public class Main {
         Path docsPath = Paths.get("src/main/resources/docs");
 
         Chunker chunker = new Chunker();
-        EmbeddingService embeddingService = new EmbeddingService();
 
         try (Stream<Path> paths = Files.list(docsPath)) {
 
@@ -47,24 +35,9 @@ public class Main {
                             );
 
                             for (Chunk chunk : chunks) {
-
-                                List<Float> embedding =
-                                        embeddingService.createEmbedding(chunk.getContent());
-
                                 System.out.println("--- CHUNK ---");
                                 System.out.println(chunk.getContent());
-
-                                System.out.println("Embedding dimensions: " + embedding.size());
-
-                                System.out.println("First five values:");
-
-                                for (int i = 0; i < 5; i++) {
-                                    System.out.println(embedding.get(i));
-                                }
-
-                                break;
                             }
-
 
                         } catch (IOException e) {
                             e.printStackTrace();
