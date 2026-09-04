@@ -56,6 +56,6 @@ to generate an answer from the retrieved content.
 
 ## Documentation
 
-- [RAG Concepts](project-docs/rag-concepts.md)
-- [Java Implementation Walkthrough](project-docs/java-walkthrough.md)
-- [Documentation Considertions](project-docs/documentation-considerations.md)
+- [RAG Concepts](project-docs/rag-concepts.md)--if you are interested in RAG background information
+- [Java Implementation Walkthrough](project-docs/java-walkthrough.md)--if you want to see how to develop code to implement RAG
+- [Documentation Considertions](project-docs/documentation-considerations.md)--if you want to see how to write technical documentation for optimized RAG consumption

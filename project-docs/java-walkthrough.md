@@ -10,7 +10,8 @@ src /
         Chunk.java
         Chunker.java
         Document.java
-        EmbeddingSereevice.java
+        EmbeddedChunk.java
+        EmbeddingService.java
         Main.java
     resources /
       docs /
@@ -797,6 +798,8 @@ Let's modify the application to generate embedding vectors for all chunks in all
 
 First, create the `EmbeddedChunk` class that maps a `Chunk` object to its embeddings.
 This is in lieu of using an actual vector database.
+
+Open `EmbeddedChunk.java` and add this content:
 
 ```java
 package com.steveomurphy.tasters.rag;
