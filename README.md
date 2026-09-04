@@ -1,7 +1,25 @@
-# Retrieval-Augmented Generation
+# RAG Technical Taster
+>A hands-on exploration of Retrieval-Augmented Generation (RAG), developed to understand and document the technologies and implementation patterns behind RAG systems.
 
-> Current milestone: In-memory vector database
-  
+Current status
+> 🚧: Work in progress
+> Currently implements an in-memory vector database and explores the foundational components of a RAG pipeline. Additional components will be added as development progresses.
+
+Topics currently covered:
+
+- Embeddings
+- Vector representations
+- Vector similarity/search
+- In-memory vector database
+- Retrieval
+- RAG architecture
+
+Purpose
+
+> This project serves as both a technical learning exercise and a documentation project. The goal is to develop a practical understanding of RAG implementation while producing clear, developer-oriented technical documentation
+
+# Retrieval-Augmented Generation
+ 
 A hands-on exploration of RAG pipelines using Java.
 
 ## What is RAG?
