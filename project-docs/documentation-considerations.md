@@ -276,3 +276,21 @@ Thoughtful document structure
 Documentation that works well for both
 humans and RAG systems
 ```
+
+# To summarize
+
+That means things tech writers spent their career caring about as a technical writer become technically relevant:
+
+- Clear headings → meaningful chunks
+
+- Explicit terminology → better semantic signals
+
+- Well-structured procedures → coherent retrieved context
+
+- Good information architecture → better retrieval boundaries
+
+- Clear relationships between concepts → less ambiguous context
+
+That's the bridge between your documentation experience and the RAG engineering world.
+
+

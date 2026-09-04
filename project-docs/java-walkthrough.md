@@ -792,7 +792,180 @@ And that is the "retrieval" in Retrieval-Augmented Generation.
 
 ## But first
 
-Let's modify the application to generate embedding vectors for all chunks in all documents. 
+Let's modify the application to generate embedding vectors for all chunks in all documents.
+
+
+First, create the `EmbeddedChunk` class that maps a `Chunk` object to its embeddings.
+This is in lieu of using an actual vector database.
+
+```java
+package com.steveomurphy.tasters.rag;
+
+import java.util.List;
+
+/**
+ * Stores embeddings as a mapping from a Chunk to its embeddings.
+ */
+public class EmbeddedChunk {
+
+    /**
+     * the chunk object
+     */
+    private final Chunk chunk;
+    /**
+     * the embeddings
+     */
+    private final List<Float> embedding;
+
+    /**
+     * Constructor. Creates the mapping structure
+     * @param chunk
+     * @param embedding
+     */
+    public EmbeddedChunk(Chunk chunk, List<Float> embedding) {
+        this.chunk = chunk;
+        this.embedding = embedding;
+    }
+
+    /**
+     * retrieve the chunk
+     * @return the chunk
+     */
+    public Chunk getChunk() {
+        return chunk;
+    }
+
+    /**
+     * retrieves the chunk's embeddings
+     * @return the chunk's embeddings
+     */
+    public List<Float> getEmbedding() {
+        return embedding;
+    }
+}
+```
+
+Next, modify `Main.java`:
+1. Remove the `break` that stopped processing a file after reading the first chunk
+2. Remove the embeddings limitation that printed the first five embeddings.
+3. Add functionality to collect a chunk and its embeddings. You do this by using the new EmbeddingChunk class:
+
+3a. Create structure that will be a list of all embeddings of all documents. Add it before the loop 
+through all documents.
+
+```java
+List<EmbeddedChunk> embeddedChunks = new ArrayList<EmbeddedChunk>();
+```
+
+3b. Then within the loop through a document's chunks, create the `EmbeddedChunk` instance and  add the previously created embedding.  
+
+
+```java
+EmbeddedChunk embeddedChunk = new EmbeddedChunk(chunk, embedding);
+embeddedChunks.add(embeddedChunk);
+```
+3c. Print the chunk and details about its embeddings:
+
+```java
+    System.out.println("--- CHUNK ---");
+    System.out.println(chunk.getContent());
+    System.out.println("Embedding dimensions: " + embedding.size());
+```
+
+4.When the chunk loop is done, add the embeddings to the `embeddedChunks` list.
+
+The modified `Main.java` should look like this:
+
+```java
+package com.steveomurphy.tasters.rag;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
+/**
+ * Driver program
+ * <p>Maintains a list of embeddings that acts as a substitute vector database.</p>
+ * <p>Collects embeddings for all document chunks.</p>
+ *
+ */
+public class Main {
+
+    /**
+     * @param args Standard command line args. Not used
+     *  <p>Using <code>java.nio.file.Path</code>, <code>Paths</code>, and <code>Files</code> functionality, does the following for each source document:</p>
+     *  <ol>
+     *  <li>Reads the document contents</li>
+     *  <li>Creates a <code>Document</code> object from the file name and contents.</li>
+     *  <li>Using a <code>Chunker</code> object, breaks the document contents into Chunks</li>
+     *  <li>Using the EmbeddingService, creates the chunk's embeddings</li>
+     *  <li>Associates each chunk with the chunk's embeddings.</li>
+     *  <li>Adds the chunk map to the global list of embeddings.</li>
+     *  <li>Prints information about the chunk and its embeddings.</li>
+     *  </ol>
+     */
+    public static void main(String[] args) {
+
+        Path docsPath = Paths.get("src/main/resources/docs");
+
+        Chunker chunker = new Chunker();
+        EmbeddingService embeddingService = new EmbeddingService();
+
+
+        // List to collect all chunks and their embeddings. An in-memory vector store
+        List<EmbeddedChunk> embeddedChunks = new ArrayList<>();
+
+        try (Stream<Path> paths = Files.list(docsPath)) {
+
+            paths
+                    .filter(Files::isRegularFile)
+                    .forEach(path -> {
+
+                        try {
+                            String content = Files.readString(path);
+
+                            Document document =
+                                    new Document(path.getFileName().toString(), content);
+
+                            List<Chunk> chunks = chunker.chunk(document);
+
+                            System.out.println(
+                                    "===== " + document.getSource() + " ====="
+                            );
+
+                            for (Chunk chunk : chunks) {
+
+                                List<Float> embedding =
+                                        embeddingService.createEmbedding(chunk.getContent());
+
+                                // Associate the chunk with its embedding
+                                EmbeddedChunk embeddedChunk =
+                                        new EmbeddedChunk(chunk, embedding);
+
+                                // Add the embedded chunk to the in-memory vector store
+                                embeddedChunks.add(embeddedChunk);
+
+                                System.out.println("--- CHUNK ---");
+                                System.out.println(chunk.getContent());
+                                System.out.println("Embedding dimensions: " + embedding.size());
+                            }
+
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
 
 
 

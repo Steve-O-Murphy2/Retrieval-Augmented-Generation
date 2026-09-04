@@ -3,15 +3,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
 /**
  * Driver program
- * <p>Maintains a list of embeddings that acts as a substitute vector database.</p>
- * <p>Collects embeddings for all document chunks.</p>
- *
  */
 public class Main {
 
@@ -22,10 +18,9 @@ public class Main {
      *  <li>Reads the document contents</li>
      *  <li>Creates a <code>Document</code> object from the file name and contents.</li>
      *  <li>Using a <code>Chunker</code> object, breaks the document contents into Chunks</li>
+     *  <li>Reads the first chunk in the document</li>
      *  <li>Using the EmbeddingService, creates the chunk's embeddings</li>
-     *  <li>Associates each chunk with the chunk's embeddings.</li>
-     *  <li>Adds the chunk map to the global list of embeddings.</li>
-     *  <li>Prints information about the chunk and its embeddings.</li>
+     *   <li>Prints the first five embeddings.</li>
      *  </ol>
      */
     public static void main(String[] args) {
@@ -34,10 +29,6 @@ public class Main {
 
         Chunker chunker = new Chunker();
         EmbeddingService embeddingService = new EmbeddingService();
-
-
-        // List to collect all chunks and their embeddings. An in-memory vector store
-        List<EmbeddedChunk> embeddedChunks = new ArrayList<>();
 
         try (Stream<Path> paths = Files.list(docsPath)) {
 
@@ -62,16 +53,18 @@ public class Main {
                                 List<Float> embedding =
                                         embeddingService.createEmbedding(chunk.getContent());
 
-                                // Associate the chunk with its embedding
-                                EmbeddedChunk embeddedChunk =
-                                        new EmbeddedChunk(chunk, embedding);
-
-                                // Add the embedded chunk to the in-memory vector store
-                                embeddedChunks.add(embeddedChunk);
-
                                 System.out.println("--- CHUNK ---");
                                 System.out.println(chunk.getContent());
+
                                 System.out.println("Embedding dimensions: " + embedding.size());
+
+                                System.out.println("First five values:");
+
+                                for (int i = 0; i < 5; i++) {
+                                    System.out.println(embedding.get(i));
+                                }
+
+                                break;
                             }
 
 

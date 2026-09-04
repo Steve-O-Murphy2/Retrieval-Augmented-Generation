@@ -209,7 +209,7 @@ We don't need to understand what dimension 847 "means." What matters for retriev
 
 ---
 
-# Vectors: Magnitude, Direction, and Components
+# Vectors: magnitude, direction, and components
 
 To understand how we compare embeddings, it helps to review what a vector represents.
 
@@ -273,7 +273,7 @@ The mathematics works the same way. We simply can't visualize the full space.
 
 ---
 
-# Cosine Similarity
+# Cosine similarity
 
 Now we can see why vector direction matters.
 
@@ -351,7 +351,7 @@ For embeddings, that becomes a useful measure of **semantic similarity**.
 
 ---
 
-# Using Cosine Similarity for Retrieval
+# Using cosine similarity for retrieval
 
 Here's where the pieces come together.
 
@@ -418,7 +418,7 @@ For RAG, we turn that mathematical question into:
 
 ---
 
-# Retrieval, Augmentation, and Generation
+# Retrieval, augmentation, and generation
 
 At this point, the three parts of the name **Retrieval-Augmented Generation** should make sense.
 
@@ -467,4 +467,266 @@ User question ──► EMBEDDING
                     ANSWER
 ```
 
+# A real-life example
+
+A very realistic RAG job scenario is an enterprise with a huge internal knowledge base and an engineering team building a system that lets employees ask questions of that knowledge in plain English.
+
+For example, imagine a company like a large software vendor with thousands of engineering and support documents:
+
+```
+                 COMPANY KNOWLEDGE
+                        │
+       ┌────────────────┼────────────────┐
+       │                │                │
+   Confluence        GitHub          PDFs/DOCX
+       │                │                │
+       └────────────────┼────────────────┘
+                        ▼
+                  INGESTION PIPELINE
+                        │
+                 Parse / normalize
+                        │
+                     Chunk
+                        │
+                   Embed text
+                        │
+                        ▼
+                  VECTOR DATABASE
+                        │
+                        │
+Employee question ──────┘
+        │
+        ▼
+   Query embedding
+        │
+        ▼
+   Similarity search
+        │
+        ▼
+ Relevant documents
+        │
+        ▼
+   LLM + context
+        │
+        ▼
+      Answer
+```
+
+Suppose an employee asks:
+
+> "What's the procedure for rotating production API credentials, and who needs to approve it?"
+
+The company may have information scattered across:
+
+- a security policy
+- an internal engineering wiki
+- an API operations guide
+- an incident-response document
+- several versions of procedures
+- perhaps even tickets or GitHub documentation
+
+Nobody wants the employee to search six systems manually.
+
+So the company builds an internal RAG assistant.
+
+The employee asks the question. The system turns the question into an embedding, searches the vector database, retrieves the most relevant chunks, and gives those chunks to the LLM.
+
+The LLM then produces something like:
+
+> Production API credentials must be rotated every 90 days. The rotation requires approval from the service owner and Security Operations. See the Production Credential Rotation Procedure for the complete process.
+
+The LLM isn't supposed to know the company's internal procedure from its pretrained knowledge. The RAG system retrieved the company's actual documentation and supplied it as context.
+
+# What does a RAG engineer do?
+
+This is a bit of bonus information to round out the picture.
+
+Companies hire engineers to implement RAG pipelines; this is a specialty job.
+
+The engineer isn't necessarily sitting around writing clever prompts all day. They're responsible for building and maintaining the machinery that makes retrieval work.
+
+They might build a system responsible for the following processes.
+
+## 1. Document ingestion
+
+Connect to systems such as:
+
+```
+Confluence
+GitHub
+SharePoint
+Google Drive
+S3
+Databases
+Internal APIs
+```
+and pull documents into the RAG system.
+
+
+
+
 The rest of this project will implement these pieces one at a time.
+
+## 2. Document processing
+
+Turn those different source formats into something the pipeline can work with:
+
+```
+DOCX ──┐
+PDF  ──┤
+HTML ──┼──► normalized documents
+MD   ──┤
+Wiki ──┘
+```
+
+This is exactly the distinction we were talking about in `documentation-considerations.md`: the source format isn't really the RAG problem. The ingestion pipeline has to turn the source into usable content.
+
+## 3. Chunking
+
+Take a 50-page engineering document and turn it into meaningful pieces.
+
+Bad:
+```
+chunk 1 = pages 1-5
+chunk 2 = pages 6-10
+```
+Better:
+
+```
+chunk 1 = Authentication requirements
+chunk 2 = Creating API credentials
+chunk 3 = Rotating API credentials
+chunk 4 = Revoking API credentials
+```
+The engineer has to think about chunk size, boundaries, overlap, metadata, and so forth.
+
+## 4. Embedding
+
+Send the chunks through an embedding model:
+
+```
+"API credentials must be rotated every 90 days."
+                         │
+                         ▼
+                  embedding model
+                         │
+                         ▼
+              [0.013, -0.042, ...]
+```
+Those vectors go into the vector database.
+
+## 5. Retrieval
+
+When the employee asks:
+
+> "How often do production API credentials need to be rotated?"
+
+the system creates another embedding:
+
+```
+question
+   │
+   ▼
+query embedding
+   │
+   ▼
+vector search
+   │
+   ├── chunk A  similarity .91
+   ├── chunk B  similarity .84
+   ├── chunk C  similarity .42
+   └── chunk D  similarity .17
+```
+
+The system retrieves the highest-ranked chunks.
+
+## 6. Retrieval quality
+
+And this is where the job gets considerably more interesting.
+
+The engineer discovers that users ask:
+
+> "How often do we change API keys?"
+
+but the documentation says:
+
+> "Production credentials must be rotated every 90 days."
+
+Will the system retrieve the right chunk?
+
+Maybe.
+
+If it doesn't, the engineer might investigate:
+
+```
+chunking strategy
+embedding model
+metadata
+similarity threshold
+top-K retrieval
+query transformation
+hybrid keyword/vector search
+reranking
+document quality
+```
+
+So _RAG engineering is partly a retrieval-quality engineering problem._
+
+## Keeping the knowledge base updated
+
+Imagine the company changes its credential policy.
+
+The source document gets updated:
+
+> 90 days → 60 days
+
+The RAG system now needs to notice that the source changed, reprocess the document, generate new embeddings, and update the vector store.
+
+So a production RAG pipeline might look more like:
+
+```
+              DOCUMENT SOURCES
+                     │
+                     ▼
+              Change detection
+                     │
+                     ▼
+               Ingestion
+                     │
+                     ▼
+             Parse / normalize
+                     │
+                     ▼
+                 Chunking
+                     │
+                     ▼
+                Embeddings
+                     │
+                     ▼
+               Vector store
+                     │
+                     ▼
+             Retrieval service
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+     User question         Metadata/filter
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+                  Retrieval
+                     │
+                     ▼
+                  Reranking
+                     │
+                     ▼
+              Context assembly
+                     │
+                     ▼
+                    LLM
+                     │
+                     ▼
+                  Answer
+```
+
+ 
