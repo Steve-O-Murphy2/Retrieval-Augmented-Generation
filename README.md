@@ -1,5 +1,7 @@
 # Retrieval-Augmented Generation
 
+> Current milestone: In-memory vector database
+  
 A hands-on exploration of RAG pipelines using Java.
 
 ## What is RAG?
@@ -17,7 +19,6 @@ embeddings, retrieves relevant chunks, and eventually uses an LLM
 to generate an answer from the retrieved content.
 
 ![RAG pipeline](images/pipeline.png)
-
 
 ## The RAG Pipeline
 

@@ -872,7 +872,7 @@ embeddedChunks.add(embeddedChunk);
     System.out.println("Embedding dimensions: " + embedding.size());
 ```
 
-4.When the chunk loop is done, add the embeddings to the `embeddedChunks` list.
+4. When the chunk loop is done, add the embeddings to the `embeddedChunks` list.
 
 The modified `Main.java` should look like this:
 
@@ -966,10 +966,10 @@ public class Main {
 }
 ```
 
-
-
-
 # Retrieval
-
+> 🚧 **Coming soon:** This section will cover retrieving relevant documents
+> from the vector database using similarity search.
 
 # Generation
+> 🚧 **Coming soon:** This section will explore using retrieved content as
+context for LLM-generated responses.

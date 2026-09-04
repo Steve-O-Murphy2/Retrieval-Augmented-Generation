@@ -587,8 +587,8 @@ Take a 50-page engineering document and turn it into meaningful pieces.
 
 Bad:
 ```
-chunk 1 = pages 1-5
-chunk 2 = pages 6-10
+chunk 1 = pages 1-25
+chunk 2 = pages 26-50
 ```
 Better:
 
