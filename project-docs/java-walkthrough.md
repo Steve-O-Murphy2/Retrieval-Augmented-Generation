@@ -1028,7 +1028,7 @@ The important points are:
 - Each embedding has 1,536 dimensions.
 - Each EmbeddedChunk associates the original chunk with its vector.
 - All of those EmbeddedChunk objects accumulate in the `embeddedChunks` `List`.
-- 
+
 The output continues in the same pattern for errors.md, rate-limits.md, and webhooks.md.
 
 ## Recap
