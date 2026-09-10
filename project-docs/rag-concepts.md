@@ -10,6 +10,9 @@ The basic idea is simple:
 
 The **"Augmented"** part is the bridge between retrieval and generation. The retrieved information augments the context available to the LLM.
 
+>RAG lets you use a model (LLM) that does not have domain-specific knowledge you need it to answer from. But, the model
+> still needs general language and reasoning capabilities.
+
 ### Without RAG
 
 Suppose the user asks:
@@ -28,7 +31,7 @@ User question
    Answer
 ```
 
-The LLM has only whatever knowledge it already possesses.
+The LLM has only whatever knowledge it already possesses, so you may or may not get a good answer.
 
 ### With RAG
 
@@ -58,6 +61,8 @@ Retrieve relevant chunks
                 ▼
               Answer
 ```
+
+>An **embedding** is a numerical representation of text that captures aspects of its meaning. In RAG, we call it a *vector*.
 
 For example, imagine `authentication.md` contains:
 
@@ -116,16 +121,18 @@ The complete pipeline we are building looks like this:
                           answer
 ```
 
-The important stages are:
-
+The preceding diagram illustrates two RAG paths.
+Initial storing of information. This flow starts at the top and flows down the right side of the diagram. 
 1. **Load documentation**
 2. **Chunk the documentation**
 3. **Generate embeddings for the chunks**
 4. **Store the embeddings**
-5. **Generate an embedding for the user's question**
-6. **Retrieve the chunks most relevant to the question**
-7. **Add those chunks to the LLM's context**
-8. **Generate the answer**
+
+Answer a user question. This flow starts at the "user question" stage and flows downward in the diagram.
+1. **Generate an embedding for the user's question**
+2. **Retrieve the chunks most relevant to the question**
+3. **Add those chunks to the LLM's context**
+4. **Generate the answer**
 
 The concepts behind those stages are easier to understand if we start with embeddings.
 
@@ -189,7 +196,7 @@ authentication = 0.87
 webhooks = 0.14
 ```
 
-It's more like a point in a mathematical space with hundreds or thousands of dimensions:
+It's more like a point in a mathematical space with hundreds or thousands of dimensions.
 
 ```text
                      dimension 1
@@ -201,7 +208,16 @@ It's more like a point in a mathematical space with hundreds or thousands of dim
                           └──────── dimension 2
 ```
 
-Except there aren't just two dimensions. There may be hundreds or thousands.
+Each point represents a vector. For example:
+```
+A = [2, 3]
+B = [4, 5]
+```
+
+The preceding figure shows just two dimensions because it is next to impossible to show *all* dimenstions. 
+There may be hundreds or thousands.
+
+
 
 With `text-embedding-3-small`, for example, the standard embedding has **1,536 dimensions**. The model can also produce shorter embeddings by specifying a smaller dimensions value.
 
@@ -220,6 +236,7 @@ For example:
 ```text
 A = [2, 3]
 ```
+This is could be one of the vectors in the two-dimensional space illustrated above.
 
 The two numbers are the vector's **components**. They tell us how far the vector extends along each dimension.
 
@@ -285,37 +302,46 @@ If you remember trigonometry, cosine comes from a right triangle:
 cos(θ) = adjacent / hypotenuse
 ```
 
-For vectors, cosine similarity uses the angle between the vectors.
+For vectors, cosine similarity uses the *angle between the vectors*.
 
 Imagine two vectors starting at the same point:
 
+Vector A:
 ```text
-                 B
+                 A
                 •
               /
             /
           /
         /
-      •────────────• A
-    origin        Vector A
+      •
+    origin 
 ```
 
-The two vectors have an angle between them.
+Vector B:
+```
+                         B
+                        •
+                    /
+                /
+            /
+        /
+      •
+    origin
+```
 
-Cosine tells us something about that angle:
 
+The angle between:
 ```text
-Small angle
 
      ↗
     /
    /
   ↗
-
-Vectors point in nearly the same direction
-                ↓
-           cosine ≈ 1
 ```
+
+The two vectors point in nearly the same direction, so the angle between them is ≈ 0 which makes the
+cosine ≈ 1.
 
 Whereas:
 
@@ -344,8 +370,8 @@ The angle is 180° and:
 ```text
 cos(180°) = -1
 ```
-
-So cosine similarity gives us a convenient measure of how similarly two vectors are pointing.
+>The closer the cosine is to 0, the more similar two vectors are. 
+> Cosine similarity gives us a convenient measure of how similarly two vectors are pointing.
 
 For embeddings, that becomes a useful measure of **semantic similarity**.
 
@@ -371,11 +397,7 @@ Suppose we have three vectors representing three pieces of documentation:
              Webhooks
 ```
 
-Now suppose we turn the user's question:
-
-> How do I authenticate?
-
-into another embedding vector.
+Now suppose we turn the user's query *How do I authenticate?* into another embedding vector.
 
 If that query vector points in approximately the same direction as the Authentication vector, their cosine similarity will be high.
 
@@ -384,8 +406,8 @@ If it points in a very different direction from the Webhooks vector, their cosin
 Conceptually:
 
 ```text
-Query → Authentication    cosine similarity = high
-Query → Webhooks          cosine similarity = low
+User question compared to Authentication    cosine similarity = high
+User question compared to Webhooks          cosine similarity = low
 ```
 
 We can calculate the cosine similarity between the query vector and each stored document vector, then rank the results.
@@ -525,7 +547,9 @@ The company may have information scattered across:
 - several versions of procedures
 - perhaps even tickets or GitHub documentation
 
-Nobody wants the employee to search six systems manually.
+Nobody wants the employee to search six systems manually. And actually, I had to do that at one job.
+Searching in Confluence alone was a big task. I had to look at each search result, takes notes, then
+attempt to synthesize all notes.
 
 So the company builds an internal RAG assistant.
 

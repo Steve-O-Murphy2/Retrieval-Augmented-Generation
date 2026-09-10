@@ -3,16 +3,16 @@ package com.steveomurphy.tasters.rag;
 import java.util.List;
 
 /**
- * Stores embeddings as a mapping from a Chunk to its embeddings.
+ * Associates a Chunk with its embedding vector.
  */
 public class EmbeddedChunk {
 
     /**
-     * the chunk object
+     * The document chunk
      */
     private final Chunk chunk;
     /**
-     * the embeddings
+     * The chunk's embedding vector
      */
     private final List<Float> embedding;
 
@@ -27,16 +27,16 @@ public class EmbeddedChunk {
     }
 
     /**
-     * retrieve the chunk
-     * @return the chunk
+     * Returns the document chunk
+     * @return the document chunk
      */
     public Chunk getChunk() {
         return chunk;
     }
 
     /**
-     * retrieves the chunk's embeddings
-     * @return the chunk's embeddings
+     * Returns the chunk's embedding vector
+     * @return the chunk's embedding vector
      */
     public List<Float> getEmbedding() {
         return embedding;

@@ -807,51 +807,52 @@ package com.steveomurphy.tasters.rag;
 import java.util.List;
 
 /**
- * Stores embeddings as a mapping from a Chunk to its embeddings.
+ * Associates a Chunk with its embedding vector.
  */
 public class EmbeddedChunk {
 
-    /**
-     * the chunk object
-     */
-    private final Chunk chunk;
-    /**
-     * the embeddings
-     */
-    private final List<Float> embedding;
+   /**
+    * The document chunk
+    */
+   private final Chunk chunk;
+   /**
+    * The chunk's embedding vector
+    */
+   private final List<Float> embedding;
 
-    /**
-     * Constructor. Creates the mapping structure
-     * @param chunk
-     * @param embedding
-     */
-    public EmbeddedChunk(Chunk chunk, List<Float> embedding) {
-        this.chunk = chunk;
-        this.embedding = embedding;
-    }
+   /**
+    * Constructor. Creates the mapping structure
+    * @param chunk
+    * @param embedding
+    */
+   public EmbeddedChunk(Chunk chunk, List<Float> embedding) {
+      this.chunk = chunk;
+      this.embedding = embedding;
+   }
 
-    /**
-     * retrieve the chunk
-     * @return the chunk
-     */
-    public Chunk getChunk() {
-        return chunk;
-    }
+   /**
+    * Returns the document chunk
+    * @return the document chunk
+    */
+   public Chunk getChunk() {
+      return chunk;
+   }
 
-    /**
-     * retrieves the chunk's embeddings
-     * @return the chunk's embeddings
-     */
-    public List<Float> getEmbedding() {
-        return embedding;
-    }
+   /**
+    * Returns the chunk's embedding vector
+    * @return the chunk's embedding vector
+    */
+   public List<Float> getEmbedding() {
+      return embedding;
+   }
 }
+
 ```
 
 Next, modify `Main.java`:
 1. Remove the `break` that stopped processing a file after reading the first chunk
 2. Remove the embeddings limitation that printed the first five embeddings.
-3. Add functionality to collect a chunk and its embeddings. You do this by using the new EmbeddingChunk class:
+3. Add functionality to collect a chunk and its embeddings. You do this by using the new `EmbeddedChunk` class:
 
 3a. Create structure that will be a list of all embeddings of all documents. Add it before the loop 
 through all documents.
@@ -860,7 +861,7 @@ through all documents.
 List<EmbeddedChunk> embeddedChunks = new ArrayList<EmbeddedChunk>();
 ```
 
-3b. Then within the loop through a document's chunks, create the `EmbeddedChunk` instance and  add the previously created embedding.  
+3b. Within the loop through the document's chunks, create an `EmbeddedChunk` containing the chunk and its embedding, then add it to the `embeddedChunks` list.  
 
 
 ```java
@@ -874,8 +875,6 @@ embeddedChunks.add(embeddedChunk);
     System.out.println(chunk.getContent());
     System.out.println("Embedding dimensions: " + embedding.size());
 ```
-
-4. When the chunk loop is done, add the embeddings to the `embeddedChunks` list.
 
 The modified `Main.java` should look like this:
 
@@ -891,83 +890,176 @@ import java.util.stream.Stream;
 
 /**
  * Driver program
- * <p>Maintains a list of embeddings that acts as a substitute vector database.</p>
+ * <p>Maintains a list of embedded chunks that acts as a simplified in-memory vector store</p>
  * <p>Collects embeddings for all document chunks.</p>
- *
  */
 public class Main {
 
-    /**
-     * @param args Standard command line args. Not used
-     *  <p>Using <code>java.nio.file.Path</code>, <code>Paths</code>, and <code>Files</code> functionality, does the following for each source document:</p>
-     *  <ol>
-     *  <li>Reads the document contents</li>
-     *  <li>Creates a <code>Document</code> object from the file name and contents.</li>
-     *  <li>Using a <code>Chunker</code> object, breaks the document contents into Chunks</li>
-     *  <li>Using the EmbeddingService, creates the chunk's embeddings</li>
-     *  <li>Associates each chunk with the chunk's embeddings.</li>
-     *  <li>Adds the chunk map to the global list of embeddings.</li>
-     *  <li>Prints information about the chunk and its embeddings.</li>
-     *  </ol>
-     */
-    public static void main(String[] args) {
+   /**
+    * @param args Standard command line args. Not used
+    *  <p>Using <code>java.nio.file.Path</code>, <code>Paths</code>, and <code>Files</code> functionality, does the following for each source document:</p>
+    *  <ol>
+    *  <li>Reads the document contents.</li>
+    *  <li>Creates a <code>Document</code> object from the file name and contents.</li>
+    *  <li>Using a <code>Chunker</code> object, breaks the document contents into Chunks.</li>
+    *  <li>Creates an embedding for each chunk.</li>
+    *  <li>Associates each chunk with its embedding.</li>
+    *  <li>Adds the EmbeddedChunk to the in-memory vector store.</li>
+    *  <li>Prints information about the chunk and its embeddings.</li>
+    *  </ol>
+    */
+   public static void main(String[] args) {
 
-        Path docsPath = Paths.get("src/main/resources/docs");
+      Path docsPath = Paths.get("src/main/resources/docs");
 
-        Chunker chunker = new Chunker();
-        EmbeddingService embeddingService = new EmbeddingService();
-
-
-        // List to collect all chunks and their embeddings. An in-memory vector store
-        List<EmbeddedChunk> embeddedChunks = new ArrayList<>();
-
-        try (Stream<Path> paths = Files.list(docsPath)) {
-
-            paths
-                    .filter(Files::isRegularFile)
-                    .forEach(path -> {
-
-                        try {
-                            String content = Files.readString(path);
-
-                            Document document =
-                                    new Document(path.getFileName().toString(), content);
-
-                            List<Chunk> chunks = chunker.chunk(document);
-
-                            System.out.println(
-                                    "===== " + document.getSource() + " ====="
-                            );
-
-                            for (Chunk chunk : chunks) {
-
-                                List<Float> embedding =
-                                        embeddingService.createEmbedding(chunk.getContent());
-
-                                // Associate the chunk with its embedding
-                                EmbeddedChunk embeddedChunk =
-                                        new EmbeddedChunk(chunk, embedding);
-
-                                // Add the embedded chunk to the in-memory vector store
-                                embeddedChunks.add(embeddedChunk);
-
-                                System.out.println("--- CHUNK ---");
-                                System.out.println(chunk.getContent());
-                                System.out.println("Embedding dimensions: " + embedding.size());
-                            }
+      Chunker chunker = new Chunker();
+      EmbeddingService embeddingService = new EmbeddingService();
 
 
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    });
+      // List to collect all chunks and their embeddings. An in-memory vector store
+      List<EmbeddedChunk> embeddedChunks = new ArrayList<>();
 
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+      try (Stream<Path> paths = Files.list(docsPath)) {
+
+         paths
+                 .filter(Files::isRegularFile)
+                 .forEach(path -> {
+
+                    try {
+                       String content = Files.readString(path);
+
+                       Document document =
+                               new Document(path.getFileName().toString(), content);
+
+                       List<Chunk> chunks = chunker.chunk(document);
+
+                       System.out.println(
+                               "===== " + document.getSource() + " ====="
+                       );
+
+                       for (Chunk chunk : chunks) {
+
+                          List<Float> embedding =
+                                  embeddingService.createEmbedding(chunk.getContent());
+
+                          // Associate the chunk with its embedding
+                          EmbeddedChunk embeddedChunk =
+                                  new EmbeddedChunk(chunk, embedding);
+
+                          // Add the embedded chunk to the in-memory vector store
+                          embeddedChunks.add(embeddedChunk);
+
+                          System.out.println("--- CHUNK ---");
+                          System.out.println(chunk.getContent());
+                          System.out.println("Embedding dimensions: " + embedding.size());
+                       }
+
+
+                    } catch (IOException e) {
+                       e.printStackTrace();
+                    }
+                 });
+         System.out.println();
+         System.out.println(
+                 "Total embedded chunks: " + embeddedChunks.size()
+         );
+      } catch (IOException e) {
+         e.printStackTrace();
+      }
+   }
 }
 ```
+When you run the `main` method, you should see console output like the following:
+```
+===== authentication.md =====
+--- CHUNK ---
+# Authentication
+Embedding dimensions: 1536
+--- CHUNK ---
+The API uses API keys for authentication.
+Embedding dimensions: 1536
+--- CHUNK ---
+Include your API key in the `Authorization` header:
+Embedding dimensions: 1536
+--- CHUNK ---
+Authorization: Bearer YOUR_API_KEY
+Embedding dimensions: 1536
+--- CHUNK ---
+API keys can be regenerated from the developer portal.
+Embedding dimensions: 1536
+--- CHUNK ---
+## OAuth
+Embedding dimensions: 1536
+--- CHUNK ---
+The API also supports OAuth 2.0.
+Embedding dimensions: 1536
+===== errors.md =====
+--- CHUNK ---
+# Errors
+Embedding dimensions: 1536
+--- CHUNK ---
+Error handling is robust.
+Embedding dimensions: 1536
+===== rate-limits.md =====
+--- CHUNK ---
+# Rate Limits
+Embedding dimensions: 1536
+--- CHUNK ---
+The API allows 100 requests per minute.
+Embedding dimensions: 1536
+--- CHUNK ---
+When the rate limit is exceeded, the API returns HTTP status 429.
+Embedding dimensions: 1536
+===== webhooks.md =====
+--- CHUNK ---
+# Webhooks
+Embedding dimensions: 1536
+--- CHUNK ---
+The API has extensive webhooks for payments and messaging.
+Embedding dimensions: 1536
+
+Total embedded chunks: 14
+```
+
+The important points are:
+
+- Every chunk gets processed.
+- Every chunk gets an embedding.
+- Each embedding has 1,536 dimensions.
+- Each EmbeddedChunk associates the original chunk with its vector.
+- All of those EmbeddedChunk objects accumulate in the `embeddedChunks` `List`.
+- 
+The output continues in the same pattern for errors.md, rate-limits.md, and webhooks.md.
+
+## Recap
+The application now creates an embedding for every document chunk and associates each embedding with its source chunk in an in-memory vector store.
+In other words, *we have a collection of embedded chunks that we can search.*
+
+The pipeline looks like this:
+```
+4 documents
+    │
+    ▼
+14 chunks
+    │
+    ▼
+14 embedding vectors
+    │
+    ▼
+14 EmbeddedChunk objects
+    │
+    ▼
+in-memory vector store
+```
+
+## Next up: Retrieval
+Before we write the cosine similarity code, we'll do a small conceptual
+exercise with the 14 chunks. We'll ask:
+
+*How do I authenticate with the API?*
+
+We'll then generate an embedding for that question and compare it with
+the embeddings we've created for our document chunks.
 
 # Retrieval
 > 🚧 **Coming soon:** This section will cover retrieving relevant documents
