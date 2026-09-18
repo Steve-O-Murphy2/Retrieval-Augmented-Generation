@@ -13,6 +13,7 @@ src /
         EmbeddedChunk.java
         EmbeddingService.java
         Main.java
+        SimilarityService.java
     resources /
       docs /
         authentication.md
@@ -516,7 +517,7 @@ In mathematics, an embedding is a vector:
 
 `v=[0.12, −0.43, 0.87, 0.21`
 
-You can find a lot more details in ![rag concepts](C:\Users\Steve\dev\tasters\rag-taster\project-docs\rag-concepts.md)
+You can find a lot more details in [rag concepts](C:\Users\Steve\dev\tasters\rag-taster\project-docs\rag-concepts.md)
 
 
 
@@ -559,6 +560,9 @@ public class EmbeddingService {
     }
 }
 ```
+>The `EmbeddingService` class uses OpenAPI to create embeddings, and that counts against your OpenAI credits. 
+> Fortunately, that's the only time we use OpenAPI. The rest of time, our application
+> stores and searches them apart from OpenAPI.
 
 The `OpenAIOkHttpClient.fromEnv()` call constructs the client using a configuration from the OPEN_API_KEY environment variable you created at the beginning of this taster.
 
@@ -1062,9 +1066,404 @@ We'll then generate an embedding for that question and compare it with
 the embeddings we've created for our document chunks.
 
 # Retrieval
-> 🚧 **Coming soon:** This section will cover retrieving relevant documents
-> from the vector database using similarity search.
+
+First, create the question
+
+Add these lines to `Main.java` *after* the code that prints the number of embedded chunks. 
+
+```java
+String question = "How do I authenticate with the API?";
+
+System.out.println();
+System.out.println("Question: " + question);
+```
+That section of `Main.java` now looks like this:
+
+```java
+System.out.println();
+System.out.println(
+        "Total embedded chunks: " + embeddedChunks.size()
+);
+
+String question = "How do I authenticate with the API?";
+
+System.out.println();
+System.out.println("Question: " + question);
+```
+
+Run `Main.java` again. The last lines in the console should look like this:
+```text
+Total embedded chunks: 14
+
+Question: How do I authenticate with the API?
+```
+
+>For embeddings, we're generally interested in finding the chunks with the highest scores.
+
+Conceptually we first built the in-memory vector store. We will now create the embeddings for the question. That gives us two 
+phases:
+
+*Indexing phase*
+
+`Documents → Chunks → Embeddings → Vector Store`
+
+*Query phase*
+
+`Question → Query Embedding → Similarity Search`
+
+Now the exciting part--let's create the embedding for the question. Add the following after printing the question:
+```java
+// Create question embedding and print information about it.
+List<Float> questionEmbedding =
+        embeddingService.createEmbedding(question);
+
+System.out.println();
+System.out.println("Question embedding dimensions: "
+        + questionEmbedding.size());
+```
+The and of `main()` now looks like this:
+```java
+System.out.println();
+System.out.println(
+        "Total embedded chunks: " + embeddedChunks.size()
+);
+
+String question = "How do I authenticate with the API?";
+
+System.out.println();
+System.out.println("Question: " + question);
+
+List<Float> questionEmbedding =
+        embeddingService.createEmbedding(question);
+
+System.out.println();
+System.out.println("Question embedding dimensions: "
+        + questionEmbedding.size());
+```
+
+When you run `Main.java`, the last lines in the console should look like this:
+```
+Question: How do I authenticate with the API?
+
+Question embedding dimensions: 1536
+```
+You have successfully created the question's embeddings.
+
+> We now have two things that can be mathematically compared: the document 
+> chunk embeddings and the question embedding.
+
+Conceptually it looks like this:
+```
+Question vector
+      │
+      │
+      ├── compare ──→ Chunk 1 vector
+      ├── compare ──→ Chunk 2 vector
+      ├── compare ──→ Chunk 3 vector
+      ├── compare ──→ ...
+      └── compare ──→ Chunk 14 vector
+```
+The question embedding will be compared to the embedding for each chunk.
+
+>And all 15 vectors have 1,536 dimensions: 14 document-chunk vectors plus the question vector. 
+> They're therefore in the same vector space and can be compared. 
+
+Now, we need to answer:
+
+Which of those 14 chunk vectors is most similar to the question vector?
+
+That's what cosine similarity will tell us. We'll eventually do something conceptually like:
+
+Question: "How do I authenticate with the API?"
+
+```
+          question
+             ↓
+       question vector
+             ↓
+     cosine similarity
+       ↙    ↓    ↘
+    chunk 1 chunk 2 ... chunk 14
+     0.31    0.82       0.27
+               ↑
+          best match
+```
+
+> The 0.82 isn't saying 82% of the question matches the chunk. It's a similarity score based on the angle between the two vectors.
+
+So now the question is: *How do we mathematically compare two 1536-dimensional vectors?*
+
+We use this formula:
+
+$\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$
+
+- The numerator $A \cdot B$ is the dot product. (Dot products are used to find the angle between vectors.)
+- The denominator is the product of the magnitudes of the two vectors:: $|A||B|$. (The magnitude of a vector is a scalar value representing its length.)
+
+(See rag-concepts.md for more information.)
+
+## Example
+
+Suppose our question produces this vector:
+
+`Q = [1536 numbers]`
+
+And our document chunks have:
+
+```
+C1 = [1536 numbers]
+C2 = [1536 numbers]
+C3 = [1536 numbers]
+...
+C14 = [1536 numbers]
+```
+We calculate:
+
+```
+cosine(Q, C1)  → 0.31
+cosine(Q, C2)  → 0.84
+cosine(Q, C3)  → 0.27
+...
+cosine(Q, C14) → 0.76
+```
+
+Now we can rank them:
+
+```
+C2   0.84  ← highest
+C14  0.76
+C7   0.68
+C3   0.27
+...
+```
+>So C2 is our best semantic match for the question.
+
+That's retrieval.
+
+Notice something important here--we aren't asking:
+
+"Does this chunk contain the words authenticate and API?"
+
+We're asking:
+
+"Is the meaning represented by this chunk's embedding close to the meaning represented by the question's embedding?"
+
+That's the magic that makes semantic retrieval possible.
+
+## How does the `EmbeddedChunk` class fit into this?
+
+Remember that we deliberately created:
+```java
+public class EmbeddedChunk {
+
+    private final Chunk chunk;
+    private final List<Float> embedding;
+
+    ...
+}
+```
+Each object contains both halves of the puzzle:
+
+```
+EmbeddedChunk
+│
+├── Chunk
+│     └── "To authenticate..."
+│
+└── embedding
+└── [1536 numbers]
+
+```
+
+
+
+Our question has:
+
+`List<Float> questionEmbedding`
+
+So our eventual retrieval algorithm will basically say:
+
+For each EmbeddedChunk:
+
+    Take its embedding
+
+    Compare it with questionEmbedding
+
+    Calculate cosine similarity
+
+    Remember the score
+
+Then:
+
+    Sort by score
+
+    Take the best matches
+
+
+## Let's create a `SimilarityService` class
+
+The class will implement the calculation represented by $\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$ 
+,that is, the cosine similiarity to compare vectors.
+
+
+Open `SimilarityService.java` and add the following content:
+
+```java
+package com.steveomurphy.tasters.rag;
+
+import java.util.List;
+
+public class SimilarityService {
+
+    public double cosineSimilarity(
+            List<Float> vectorA,
+            List<Float> vectorB) {
+
+       if (vectorA.size() != vectorB.size()) {
+          throw new IllegalArgumentException(
+                  "Vectors must have the same dimensions"
+          );
+       }        
+        
+        double dotProduct = 0.0;
+        double magnitudeA = 0.0;
+        double magnitudeB = 0.0;
+
+        for (int i = 0; i < vectorA.size(); i++) {
+
+            double a = vectorA.get(i);
+            double b = vectorB.get(i);
+
+            dotProduct += a * b;
+            magnitudeA += a * a;
+            magnitudeB += b * b;
+        }
+
+        magnitudeA = Math.sqrt(magnitudeA);
+        magnitudeB = Math.sqrt(magnitudeB);
+
+        return dotProduct / (magnitudeA * magnitudeB);
+    }
+}
+```
+
+Let's map the code to the formula $\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$
+
+`dotProduct += a * b;` calculates $\displaystyle {A \cdot B}$
+
+The next two: 
+
+```java
+magnitudeA += a * a;
+magnitudeB += b * b;
+```
+
+build the sums needed for the vector magnitudes:
+
+\[
+$|A| = \sqrt{\sum_{i=1}^{n} A_i^2}$
+\]
+
+and
+
+\[
+$|B| = \sqrt{\sum_{i=1}^{n} B_i^2}$
+\]
+
+Then:
+
+```java
+magnitudeA = Math.sqrt(magnitudeA);
+magnitudeB = Math.sqrt(magnitudeB);
+```
+
+So `return dotProduct / (magnitudeA * magnitudeB);` literally calculates and returns:
+
+$\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$
+
+The `for` loop iterates over `vectorA`, which can be any size.
+
+*Why do we use `List<Float>`?* 
+
+Because that's what the OpenAI SDK gives us to use.
+
+*But internally we are using the `double` type  (exmaple: `double dotProduct = 0.0;`)*
+
+`double`  gives us more numerical precision while doing the mathematical calculations.
+
+And finally the vector size comparison provides a safety rail in case the two
+vectors are of different sizes.
+
+## Let's test our similarity service
+
+We'll start with two identical vectors because their cosine similarity should be 1.0, 
+giving us a result we can verify by hand.
+
+Temporarily add the following to `Main.java` at the beginning of `main()`:
+
+```java
+////////////////////////////////////////////
+// START Temporary test of SimilarityService
+////////////////////////////////////////////
+SimilarityService similarityService = new SimilarityService();
+
+List<Float> vectorA = List.of(2.0f, 3.0f);
+List<Float> vectorB = List.of(2.0f, 3.0f);
+
+double similarity =
+       similarityService.cosineSimilarity(vectorA, vectorB);
+
+System.out.println();
+System.out.println("Cosine similarity: " + similarity);
+System.exit(0);
+////////////////////////////////////////////
+// END Temporary test of SimilarityService
+////////////////////////////////////////////
+```
+
+Running `Main.java` produces this output:
+
+```
+Cosine similarity: 1.0000000000000002
+Process finished with exit code 0
+```
+**Why?**
+
+Remember: both `A` and `B` are `[2,3]`
+
+Dot product of `A` and `B`:
+
+$\displaystyle {(2 \times 2) + (3 \times 3) = 4 + 9 = 13}$
+
+Magnitude of `A`:
+
+$\displaystyle {|A|} = \sqrt{ 2^2 + 3^2} = \sqrt{13}$
+
+Magnitude of `B`:
+
+$\displaystyle {|B|} = \sqrt{ 2^2 + 3^2} = \sqrt{13}$
+
+Therefore: 
+
+$\displaystyle \frac{13}{\sqrt{13} \times \sqrt{13}} = \frac{13}{13} = 1$
+
+The mathematically expected result is exactly 1.0. Java produced `1.0000000000000002` 
+because floating-point calculations can introduce tiny rounding differences.
+
+**Our test works!**
+
+## Recap
+
+We've now created the `SimilarityService` and tested it in `Main.java`.
+
+The next step is to use this service for its actual purpose: comparing the question
+embedding with the embedding of every document chunk and using those scores to identify the most relevant chunks.
+
+# Retrieval
+
+> 🚧 **Coming soon:** This section will use cosine similarity to retrieve the
+> most relevant document chunks for a question.
 
 # Generation
 > 🚧 **Coming soon:** This section will explore using retrieved content as
-context for LLM-generated responses.
+> context for LLM-generated responses.

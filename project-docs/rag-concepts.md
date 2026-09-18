@@ -142,6 +142,14 @@ The concepts behind those stages are easier to understand if we start with embed
 
 An **embedding** is a numerical representation of text that captures aspects of its meaning.
 
+Why use the term *embedding*?
+
+Because “embedding” describes what the vector means, not what the data structure is.
+The model is essentially embedding the original object into a numerical space.
+
+- Vector = the mathematical/data structure: a sequence of numbers.
+- Embedding = a vector that represents something in a meaningful mathematical space.
+
 Suppose chunking produces this text:
 
 > The API requires an API key for authentication.
@@ -370,10 +378,22 @@ The angle is 180° and:
 ```text
 cos(180°) = -1
 ```
->The closer the cosine is to 0, the more similar two vectors are. 
-> Cosine similarity gives us a convenient measure of how similarly two vectors are pointing.
+>The closer the cosine is to 1, the more similar two vectors are. 
+> Cosine similarity gives us a convenient measure of how similarly two vectors are pointing.> 
+
+So roughly:
+
+| Cosine similarity | Interpretation       |
+|-------------------|----------------------|
+| 1.0               | Same direction       |
+| 0.8               | Very similar         |
+| 0.5               | Somewhat similar     |
+| 0.0               | Unrelated directions |
+| -1.0              | Opposite directions  |
 
 For embeddings, that becomes a useful measure of **semantic similarity**.
+
+
 
 ---
 
@@ -424,6 +444,7 @@ We're not comparing the individual numbers like this:
 query[0] vs document[0]
 query[1] vs document[1]
 ...
+query[x] vs document[x]
 ```
 
 We're comparing the **vectors as a whole**.
@@ -438,7 +459,78 @@ For RAG, we turn that mathematical question into:
 
 > How semantically similar are these two pieces of text?
 
----
+### The formula
+
+>For embeddings, we're generally interested in finding the chunks with the highest scores.
+
+The actual formula for cosine similarity is:
+
+$\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$
+
+#### Numerator
+
+The numerator $A \cdot B$ is the dot product.
+
+For two simple vectors:
+```
+A = [2, 3]
+B = [4, 5]
+```
+
+we calculate:
+```
+A · B
+= (2 × 4) + (3 × 5)
+= 8 + 15
+= 23
+```
+
+For our actual 1536-dimensional vectors, it's the same operation:
+
+```
+A · B
+= (A₁ × B₁)
++ (A₂ × B₂)
++ (A₃ × B₃)
++ ...
++ (A₁₅₃₆ × B₁₅₃₆)
+```
+
+So we're multiplying corresponding coordinates and adding all 1536 results together.
+
+#### Denominator
+
+We divide by the magnitudes of the two vectors:
+
+$|A||B|$
+
+The magnitude of a vector is calculated using the familiar *square-root-of-squares* formula.
+
+For:
+
+`A = [2, 3]`
+
+we get:
+
+```
+|A| = √(2² + 3²)
+= √13
+≈ 3.606
+```
+For our 1536-dimensional vector:
+
+```
+|A| = √(
+A₁² +
+A₂² +
+A₃² +
+...
+A₁₅₃₆²
+)
+```
+
+That's cosine similarity.
+
 
 # Retrieval, augmentation, and generation
 
