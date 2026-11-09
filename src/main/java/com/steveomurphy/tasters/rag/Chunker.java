@@ -17,14 +17,14 @@ public class Chunker {
 
         List<Chunk> chunks = new ArrayList<>();
 
-        /**
-         * Split the document into chunks. Chunks are delimited by blank li nes.
+        /*
+         * Split the document into chunks. Chunks are delimited by blank lines.
          * Each Chunk is in a String array.
          *
          */
         String[] paragraphs = document.getContent().split("\\n\\s*\\n");
 
-        /**
+        /*
          * Convert the String array into a list of Chunk objects
          */
         for (String paragraph : paragraphs) {

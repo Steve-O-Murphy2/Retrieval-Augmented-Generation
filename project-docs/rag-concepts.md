@@ -531,6 +531,17 @@ A₁₅₃₆²
 
 That's cosine similarity.
 
+Here is a general formula:
+
+Cosine similarity = vector dot product over product of magnitudes
+
+= $\displaystyle \frac{A \cdot B}{\|A\|\|B\|}$ 
+
+The numerator, the dot product  = $A \cdot B = \|A\|\|B\| \times \cos\theta$
+
+The denominator is ${\|A\|\|B\|}$
+
+so the two magnituce proddcus cancel out and we are left with consine similarity is simply $\cos\theta$  
 
 # Retrieval, augmentation, and generation
 

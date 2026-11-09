@@ -13,6 +13,7 @@ src /
         EmbeddedChunk.java
         EmbeddingService.java
         Main.java
+        ScoredChunk.java
         SimilarityService.java
     resources /
       docs /
@@ -1454,6 +1455,14 @@ because floating-point calculations can introduce tiny rounding differences.
 
 ## Recap
 
+
+| Cosine similarity | Interpretation           |
+|-------------------|--------------------------|
+| 1.0               | Same direction           |
+| 0.0               | Perpendicular directions |
+| -1.0              | Opposite directions      |
+
+
 We've now created the `SimilarityService` and tested it in `Main.java`.
 
 The next step is to use this service for its actual purpose: comparing the question
@@ -1461,9 +1470,638 @@ embedding with the embedding of every document chunk and using those scores to i
 
 # Retrieval
 
-> 🚧 **Coming soon:** This section will use cosine similarity to retrieve the
-> most relevant document chunks for a question.
+This section will use cosine similarity to retrieve the most relevant document chunks for a question.
 
-# Generation
-> 🚧 **Coming soon:** This section will explore using retrieved content as
-> context for LLM-generated responses.
+We now have
+
+```
+Document
+   ↓
+Chunks
+   ↓
+Embeddings
+```
+And you've built SimilarityService, which can answer a very specific question:
+How similar are these two vectors?
+
+Now we need to turn that capability into retrieval.
+
+The basic idea
+
+Suppose the user asks:
+
+How do I authenticate with the API?
+
+We already have embeddings for our 14 document chunks.
+
+We do this:
+
+```
+User question
+     │
+     ▼
+Create embedding for question
+     │
+     ▼
+Question embedding
+     │
+     ├──── compare with Chunk 1 embedding → similarity score
+     ├──── compare with Chunk 2 embedding → similarity score
+     ├──── compare with Chunk 3 embedding → similarity score
+     │
+     ├──── ...
+     │
+     └──── compare with Chunk 14 embedding → similarity score
+                              │
+                              ▼
+                       Rank the scores
+                              │
+                              ▼
+                    Select highest-scoring chunks
+```
+
+That is called *retrieval*.
+
+Right now, `EmbeddedChunk` contains a *Chunk* and an *Embedding,* but we need 
+to incorporate a *similarity score.* We will do that with a new `ScoredChunk` class
+
+Then, the retrieval process becomes:
+
+```
+EmbeddedChunk
+       │
+       │ + question embedding
+       ▼
+SimilarityService
+       │
+       ▼
+ScoredChunk
+       │
+       ▼
+sort by similarity
+       │
+       ▼
+top N chunks
+```
+
+`ScoredChunk` is like putting a score on each chunk. suppose we have three chunks:
+
+```
+Chunk A → similarity = 0.91
+Chunk B → similarity = 0.63
+Chunk C → similarity = 0.27
+```
+
+So conceptually:
+
+```
+ScoredChunk
+├── Chunk
+├── Embedding
+└── similarityScore
+```
+
+Then later we can put them in a list and sort them:
+```
+0.91 → Chunk A
+0.63 → Chunk B
+0.27 → Chunk C
+```
+And that's how we eventually answer:
+
+Which chunks are most relevant to this question?
+
+# Let's create the class.
+
+Open `ScoredChunk.java` and add this content:
+
+```java
+package com.steveomurphy.tasters.rag;
+
+public class ScoredChunk {
+
+   private final Chunk chunk;
+   private final double similarityScore;
+
+   public ScoredChunk(Chunk chunk, double similarityScore) {
+      this.chunk = chunk;
+      this.similarityScore = similarityScore;
+   }
+
+   public Chunk getChunk() {
+      return chunk;
+   }
+
+   public double getSimilarityScore() {
+      return similarityScore;
+   }
+}
+```
+
+We're keeping it pretty simple now.
+
+Why the `final`? We're saying that once a `ScoredChunk` is created, we *don't* want it to change.
+
+But wait, we said we would include an embedding. Well, that's a lot of data, and the embedding is already in the 
+`EmbeddedChunk` class, so we'll leave it there. Conceptually the separation is:
+
+```
+EmbeddedChunk
+    │
+    │ contains the vector
+    ▼
+SimilarityService
+    │
+    │ calculates similarity
+    ▼
+ScoredChunk
+    │
+    │ contains the result
+    ▼
+Retrieval
+    │
+    │ sorts by score
+    ▼
+Most relevant chunks
+```
+
+EmbeddedChunk answers:
+
+> What chunk is this, and what vector represents it?
+
+ScoredChunk answers:
+
+> How similar is this chunk to the question we're trying to answer?
+
+We are still keeping responsibilities separate:
+
+
+```
+SimilarityService
+     │
+     │ "These two vectors have a
+     │  similarity of 0.91."
+     ▼
+ScoredChunk
+     │
+     │ "I'm the chunk associated
+     │  with that 0.91."
+     ▼
+Retrieval
+     │
+     │ "Let's sort all the ScoredChunks
+     │  and find the highest scores."
+```
+
+Once we have a `List<ScoredChunk>`, we can sort it by similarity score and retrieve the top results.
+
+```
+Chunk + similarity score
+        ↓
+   ScoredChunk
+```
+
+The next logical step is to create a collection of these objects as we compare the question embedding against every document chunk.
+
+Then we'll have something like:
+
+```
+ScoredChunk #1 → 0.91
+ScoredChunk #2 → 0.83
+ScoredChunk #3 → 0.76
+ScoredChunk #4 → 0.42
+...
+```
+At that point, retrieval becomes a ranking problem:
+
+> Calculate a similarity score for every chunk, rank the chunks by score, and select the highest-scoring ones.
+
+Let's tackle that now. We will modify `Main.java`
+
+First remove the Temporary test of SimilarityService
+
+
+In `Manin.java`, add these lines before the `catch` clause:
+
+```java
+
+// Create a list to hold chunks and their similarity scores.
+List<ScoredChunk> scoredChunks = new ArrayList<>();
+
+// Populate the scoredChunks list
+for (EmbeddedChunk embeddedChunk : embeddedChunks) {
+
+double chunkSimilarity =
+        similarityService.cosineSimilarity(
+                questionEmbedding,
+                embeddedChunk.getEmbedding()
+        );
+
+ScoredChunk scoredChunk =
+        new ScoredChunk(
+                embeddedChunk.getChunk(),
+                chunkSimilarity
+        );
+
+        scoredChunks.add(scoredChunk);
+}
+
+// Print the scored chunks to verify retrieval scoring.
+System.out.println(
+           "Total scored chunks: " + scoredChunks.size()
+);
+         
+System.out.println();
+   System.out.println("===== SCORED CHUNKS =====");
+
+for (ScoredChunk scoredChunk : scoredChunks) {
+    System.out.println(
+        "Similarity: " + scoredChunk.getSimilarityScore()
+    );
+    System.out.println(
+        "Chunk: " + scoredChunk.getChunk().getContent()
+    );
+    System.out.println();
+}
+
+```
+
+Your program will perform this:
+
+```
+14 EmbeddedChunks
+       │
+       ├── Chunk 1 embedding ──┐
+       ├── Chunk 2 embedding ──┤
+       ├── Chunk 3 embedding ──┤
+       │                       │
+       │        Question       │
+       │           │           │
+       │           ▼           │
+       │    Question embedding │
+       │           │           │
+       └───────────┼───────────┘
+                   ▼
+          SimilarityService
+                   │
+                   ▼
+           similarity score
+                   │
+                   ▼
+             ScoredChunk
+```
+
+Verify the changes by running `main()`. You should see this output: 
+```
+===== authentication.md =====
+--- CHUNK ---
+# Authentication
+Embedding dimensions: 1536
+--- CHUNK ---
+The API uses API keys for authentication.
+Embedding dimensions: 1536
+--- CHUNK ---
+Include your API key in the `Authorization` header:
+Embedding dimensions: 1536
+--- CHUNK ---
+Authorization: Bearer YOUR_API_KEY
+Embedding dimensions: 1536
+--- CHUNK ---
+API keys can be regenerated from the developer portal.
+Embedding dimensions: 1536
+--- CHUNK ---
+## OAuth
+Embedding dimensions: 1536
+--- CHUNK ---
+The API also supports OAuth 2.0.
+Embedding dimensions: 1536
+===== errors.md =====
+--- CHUNK ---
+# Errors
+Embedding dimensions: 1536
+--- CHUNK ---
+Error handling is robust.
+Embedding dimensions: 1536
+===== rate-limits.md =====
+--- CHUNK ---
+# Rate Limits
+Embedding dimensions: 1536
+--- CHUNK ---
+The API allows 100 requests per minute.
+Embedding dimensions: 1536
+--- CHUNK ---
+When the rate limit is exceeded, the API returns HTTP status 429.
+Embedding dimensions: 1536
+===== webhooks.md =====
+--- CHUNK ---
+# Webhooks
+Embedding dimensions: 1536
+--- CHUNK ---
+The API has extensive webhooks for payments and messaging.
+Embedding dimensions: 1536
+
+Total embedded chunks: 14
+
+Question: How do I authenticate with the API?
+
+Question embedding dimensions: 1536
+Total scored chunks: 14
+
+===== SCORED CHUNKS =====
+Similarity: 0.5876401651666382
+Chunk: # Authentication
+
+Similarity: 0.6780697750997101
+Chunk: The API uses API keys for authentication.
+
+Similarity: 0.5473870198040462
+Chunk: Include your API key in the `Authorization` header:
+
+Similarity: 0.5568634997697995
+Chunk: Authorization: Bearer YOUR_API_KEY
+
+Similarity: 0.4285519853960389
+Chunk: API keys can be regenerated from the developer portal.
+
+Similarity: 0.4330151930553978
+Chunk: ## OAuth
+
+Similarity: 0.5204688338103653
+Chunk: The API also supports OAuth 2.0.
+
+Similarity: 0.13527614399545784
+Chunk: # Errors
+
+Similarity: 0.15323901825342906
+Chunk: Error handling is robust.
+
+Similarity: 0.12533699940602297
+Chunk: # Rate Limits
+
+Similarity: 0.3931141427537108
+Chunk: The API allows 100 requests per minute.
+
+Similarity: 0.2819288719748095
+Chunk: When the rate limit is exceeded, the API returns HTTP status 429.
+
+Similarity: 0.2416056125606758
+Chunk: # Webhooks
+
+Similarity: 0.37986713301611263
+Chunk: The API has extensive webhooks for payments and messaging.
+```
+
+Can you see the score alignment? Examine it yourself before continuing. 
+
+Here's a breakdown:
+
+First notice that the total embedded chunks is 14, the same as the total scored chunks. That's a good
+sanity check.
+
+A few things jump out immediately.
+
+One - The scores look sensible.
+
+The highest score is:
+
+```
+0.6780697750997101
+The API uses API keys for authentication.
+```
+That's a very reasonable result for "How do I authenticate with the API?"
+
+The next few authentication-related chunks also score relatively highly:
+
+```
+0.5876  # Authentication
+0.5568  Authorization: Bearer YOUR_API_KEY
+0.5473  Include your API key in the Authorization header
+0.5204  The API also supports OAuth 2.0
+```
+
+Meanwhile, unrelated material is much lower:
+```
+0.1352  # Errors
+0.1253  # Rate Limits
+0.2416  # Webhooks
+```
+And of course, the chunks aren't currently ordered by relevance. They appear in their
+original document/chunk order because we have not sorted them:
+```
+0.5876
+0.6781  ← highest
+0.5473
+0.5568
+0.4286
+...
+```
+
+>We have not completed retrieval yet. We still need to sort by similarity score,
+> listing the highest scorse first, then select the top K.
+
+And remember, the scores aren't simply saying "This chunk contains the word authentication," because
+we are getting different scores. Example:
+
+| Chunk                                             | Score |
+|---------------------------------------------------|-------|
+| The API uses API keys for authentication.         |0.678|
+| Include your API key in the `Authorization` header |0.547|
+
+That's because we're *comparing the semantic embeddings,* not *doing a simple keyword count.*
+
+# Checkpoint
+Now we are ready for sorting. Based on the results we just examined, the top three chunks should be:
+1. The API uses API keys for authentication.
+2. \# Authentication
+3. Authorization: Bearer YOUR_API_KEY
+
+## Ranking Chunk Scores
+
+We've calculated a similarity score for every document chunk and stored the results in the `scoredChunks` list.
+
+The scores currently appear in their original processing order. 
+To identify the most relevant chunks, we need to sort the list by similarity score, from highest to lowest.
+
+This process is called *ranking*.
+
+### Sort the scored chunks
+
+Open `Main.java`.
+
+Immediately after the loop that prints SCORED CHUNKS (ORIGINAL ORDER), add the following code:
+
+``` java
+// Sort chunks by similarity score, highest first.
+scoredChunks.sort(
+   (a, b) -> Double.compare(
+      b.getSimilarityScore(),
+      a.getSimilarityScore()
+   )
+);
+```
+
+
+This sorts the `scoredChunks` list in place. In other words, Java rearranges the existing list rather than creating a new one.
+
+Let's unpack the comparator.
+
+Java's `Double.compare()` compares two numbers and returns:
+
+* A negative value if the first number is smaller.
+
+* Zero if the numbers are equal.
+
+* A positive value if the first number is larger.
+
+By passing b first and a second, we reverse the usual comparison order. This sorts the chunks in descending order, with the highest similarity score first.
+
+For example:
+
+| a    | b    | Double.compare(b,a) |
+|------|------|---------------------|
+| 0.40 | 0.80 | Positive            |
+| 0.90 | 0.30 | Negative            |
+| 0.60 | 0.60 | Zero                |
+
+
+### Why sort after scoring?
+
+We need to calculate the similarity scores before we can rank the chunks.
+
+Imagine sorting after scoring the first chunk. You would have only one scored chunk. After scoring the second, you would have two. You could sort repeatedly, but that would be unnecessary work.
+
+Instead, we calculate all the scores first and sort the completed list once.
+
+### Print the ranked chunks
+
+Now that the list is sorted, we can display the results in ranking order.
+
+Immediately after the sorting code, add:
+
+```java
+System.out.println();
+System.out.println("===== RANKED CHUNKS =====");
+
+int rank = 1;
+
+for (ScoredChunk scoredChunk : scoredChunks) {
+
+    System.out.println("Rank: " + rank++);
+
+    System.out.println(
+            "Similarity: " + scoredChunk.getSimilarityScore()
+    );
+
+    System.out.println(
+            "Chunk: " + scoredChunk.getChunk().getContent()
+    );
+
+    System.out.println();
+}
+```
+
+Notice that the sorting operation comes before this loop. That is important: we're now printing 
+the chunks in their actual ranking order.
+
+Let's see that in action.
+
+Run `Main.java`.
+
+You should see output similar to the following:
+
+```
+===== RANKED CHUNKS =====
+Rank: 1
+Similarity: 0.6781212590475381
+Chunk: The API uses API keys for authentication.
+
+Rank: 2
+Similarity: 0.5876264002018817
+Chunk: # Authentication
+
+Rank: 3
+Similarity: 0.5568395404476401
+Chunk: Authorization: Bearer YOUR_API_KEY
+
+Rank: 4
+Similarity: 0.5474236356120742
+Chunk: Include your API key in the `Authorization` header:
+
+Rank: 5
+Similarity: 0.5204688338103653
+Chunk: The API also supports OAuth 2.0.
+
+Rank: 6
+Similarity: 0.43310375945964336
+Chunk: ## OAuth
+
+Rank: 7
+Similarity: 0.4285519853960389
+Chunk: API keys can be regenerated from the developer portal.
+
+Rank: 8
+Similarity: 0.3931141427537108
+Chunk: The API allows 100 requests per minute.
+
+Rank: 9
+Similarity: 0.37986713301611263
+Chunk: The API has extensive webhooks for payments and messaging.
+
+Rank: 10
+Similarity: 0.2819288719748095
+Chunk: When the rate limit is exceeded, the API returns HTTP status 429.
+
+Rank: 11
+Similarity: 0.2416056125606758
+Chunk: # Webhooks
+
+Rank: 12
+Similarity: 0.15331752158908069
+Chunk: Error handling is robust.
+
+Rank: 13
+Similarity: 0.13527614399545784
+Chunk: # Errors
+
+Rank: 14
+Similarity: 0.12533997534548147
+Chunk: # Rate Limits
+```
+
+The scores above are illustrative. Your actual scores may vary slightly between embedding requests.
+
+Notice that the chunks are now arranged in descending order by similarity score.
+
+The highest-scoring chunks are closely related to the authentication question. As we move down the list, the chunks generally become less relevant to that question.
+
+One important distinction: a high similarity score identifies a promising retrieval candidate. It does not guarantee that a chunk contains a complete or definitive answer.
+
+## Checkpoint: Retrieval scoring and ranking
+
+We've now completed several important steps:
+
+1. Generated an embedding for the user's question.
+
+2. Compared that embedding with the embedding of every document chunk.
+
+3. Calculated a cosine similarity score for each chunk.
+
+4. Associated each score with its corresponding chunk.
+
+5. Sorted the chunks in descending order of similarity.
+
+We now have a ranked list of all 14 document chunks.
+
+### What's next?
+
+We don't necessarily need all 14 chunks. We want to select the highest-scoring results for retrieval.
+
+This is where *top K* comes in.
+
+*K* represents the number of highest-ranked chunks we want to select. For example, if `K = 3`, we retrieve the three chunks with the highest similarity scores.
+
+That will be our next milestone.
+
+## Generation
+
+🚧 Coming soon: This section will explore using retrieved content as context for LLM-generated responses.
